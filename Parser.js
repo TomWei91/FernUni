@@ -1,73 +1,94 @@
+
 function parseInputText(textForGeneration) {
     // ----------------- Lexer -----------------
     const createToken = chevrotain.createToken;
     const Lexer = chevrotain.Lexer;
 
-    /*const Type = createToken({
-        name: "Type",
-        pattern: /(\w|\d)+/
-    })
-    */
+    const Identifier = createToken({ name: "Identifier", pattern: /[a-zA-z]\w+/ })
+    
 
     const DropDatabase = createToken({
         name: "DropDatabase",
-        pattern: /DROP DATABASE IF EXISTS/
+        pattern: /DROP DATABASE IF EXISTS/,
+        longer_alt: Identifier
     });
 
     const CreateDatabase = createToken({
         name: "CreateDatabase",
-        pattern: /CREATE DATABASE/
+        pattern: /CREATE DATABASE/,
+        longer_alt: Identifier
     });
 
     const Use = createToken({
         name: "Use",
-        pattern: /USE/
+        pattern: /USE/,
+        longer_alt: Identifier
     });
 
     const DropTable = createToken({
         name: "DropTable",
-        pattern: /DROP TABLE IF EXISTS/
+        pattern: /DROP TABLE IF EXISTS/,
+        longer_alt: Identifier
     });
 
     const CreateTable = createToken({
         name: "CreateTable",
-        pattern: /CREATE TABLE/
+        pattern: /CREATE TABLE/,
+        longer_alt: Identifier
     });
 
     const Comment = createToken({
         name: "Comment",
-        pattern: /COMMENT/
+        pattern: /COMMENT/,
+        longer_alt: Identifier
     });
 
     const AlterTable = createToken({
         name: "AlterTable",
-        pattern: /ALTER TABLE/
+        pattern: /ALTER TABLE/,
+        longer_alt: Identifier
     });
 
     const ForeignKey = createToken({
         name: "ForeignKey",
-        pattern: /ADD CONSTRAINT FOREIGN KEY/
+        pattern: /ADD CONSTRAINT FOREIGN KEY/,
+        longer_alt: Identifier
     });
+
+    const FK_ = createToken({
+        name: "FK_",
+        pattern: /FK_/,
+        longer_alt: Identifier
+    })
 
     const Constraint = createToken({
         name: "Constraint",
-        pattern: /CONSTRAINT/
+        pattern: /CONSTRAINT/,
+        longer_alt: Identifier
     });
 
     const PrimaryKey = createToken({
         name: "PrimaryKey",
-        pattern: /PRIMARY KEY/
+        pattern: /PRIMARY KEY/,
+        longer_alt: Identifier
     });
+
+    const PK_ = createToken({
+        name: "PK_",
+        pattern: /PK_/,
+        longer_alt: Identifier
+    })
 
     const References = createToken({
         name: "References",
-        pattern: /REFERENCES/
+        pattern: /REFERENCES/,
+        longer_alt: Identifier
     });
 
     const Semicolon = createToken({
         name: "Semicolon",
-        pattern: /;/,
-        group: Lexer.SKIPPED
+        pattern: /;/
+        //group: Lexer.SKIPPED
     });
 
 
@@ -90,37 +111,38 @@ function parseInputText(textForGeneration) {
     const NotNull = createToken({
         name: "NotNull",
         pattern: /NOT NULL/,
-        group: Lexer.SKIPPED
+        group: Lexer.SKIPPED,
+        longer_alt: Identifier
     });
 
     const Integer = createToken({
         name: "Integer",
         pattern: /INTEGER/,
-       // longer_alt: Type
+        longer_alt: Identifier
     });
 
     const Varchar = createToken({
         name: "Varchar",
         pattern: /VARCHAR\u0028(\d)+\u0029/,
-        //longer_alt: Type
+        longer_alt: Identifier
     });
 
     const Date = createToken({
         name: "Date",
         pattern: /DATE/,
-        //longer_alt: Type
+        longer_alt: Identifier
     });
 
     const Time = createToken({
         name: "Time",
         pattern: /TIME/,
-        //longer_alt: Type
+        longer_alt: Identifier
     });
 
     const Decimal = createToken({
         name: "Decimal",
         pattern: /DECIMAL/,
-        //longer_alt: Type
+        longer_alt: Identifier
     });
 
     const Character = createToken({
@@ -136,19 +158,21 @@ function parseInputText(textForGeneration) {
 
 
     let SQLTokens = [
-        WhiteSpace,
-        OpenBracket,
-        CloseBracket,
+        WhiteSpace,        
         DropDatabase,
         CreateDatabase,
         Use,
         DropTable,
         CreateTable,
+        OpenBracket,
+        CloseBracket,
         Comment,
         AlterTable,
         ForeignKey,
+        FK_,
         Constraint,
         PrimaryKey,
+        PK_,
         References,
         Semicolon,
         Comma,
@@ -158,9 +182,8 @@ function parseInputText(textForGeneration) {
         Date,
         Time,
         Decimal,
-        //Type,
         Character,
-        
+        Identifier
     ];
 
     let SQLLexer = new Lexer(SQLTokens);
@@ -175,45 +198,26 @@ function parseInputText(textForGeneration) {
 
     // ----------------- parser -----------------
 
-    /*
-    //I think not needed
-    const SQLVocabulary = {};
-
-    SQLTokens.forEach(tokenType => {
-        SQLVocabulary[tokenType.name] = tokenType
-    });
-
-    //Check
-    console.log(SQLVocabulary);
-    */
 
     const Parser = chevrotain.CstParser;
 
     class SQLParser extends Parser {
         constructor() {
-            super(SQLTokens, { recoveryEnabled: true})
+            super(SQLTokens, { recoveryEnabled: true })
 
 
             //$ don't have to write everytime "this"
             const $ = this;
 
-            $.RULE("TableStatement", () => {
-                $.SUBRULE($.SkipDropTable)
-                $.CONSUME(CreateTable)
-                $.CONSUME(Character)
-                $.SKIP_TOKEN(OpenBracket)
-                $.SUBRULE($.Attributes)
-                $.SKIP_TOKEN(CloseBracket)
-                $.SKIP_TOKEN(Semicolon)
-            })
 
-            $.RULE("Attributes", () => {
-                $.MANY(() => {
-                    $.CONSUME(Character)
-                    $.SUBRULE($.MetaType)
-                })
-            })
-            
+            // Rules for Table-Statement
+
+            $.RULE("CreatTableStatement", () => {
+                $.CONSUME(CreateTable);
+                $.CONSUME(Character);
+                $.SKIP_TOKEN(OpenBracket);
+            });
+
             $.RULE("MetaType", () => {
                 $.OR([
                     { ALT: () => $.CONSUME(Integer) },
@@ -221,33 +225,42 @@ function parseInputText(textForGeneration) {
                     { ALT: () => $.CONSUME(Date) },
                     { ALT: () => $.CONSUME(Time) },
                     { ALT: () => $.CONSUME(Decimal) }
-                ])
+                ]);
 
-            })
+            });
 
-            $.RULE("SkipDropTable", () => {
-                $.SKIP_TOKEN(DropDatabase)
-                $.SKIP_TOKEN(Character)
-                $.SKIP_TOKEN(Semicolon)
-            })
+            $.RULE("AttributesStatement", () => {
+                $.MANY(() => {
+                    $.CONSUME(Character);
+                    $.SUBRULE($.MetaType);
+
+                });
+            });
             
+            
+
+            $.AllStatements = $.RULE("AllStatements", () => {
+                $.SUBRULE($.CreatTableStatement);
+                $.SUBRULE($.AttributesStatement);
+            });
+
+
+          
             // very important to call this after all the rules have been setup.
-            this.performSelfAnalysis();
-        }
+            $.performSelfAnalysis();
+        };
 
-    }
+    };
 
-    const SQLParserInstance = new SQLParser();
-    SQLParserInstance.input = SQLresultLexer.tokens;
+    const SQLParserInstance = new SQLParser(SQLresultLexer.tokens);
+    //SQLParserInstance.input = SQLresultLexer.tokens;
     
     //Check
     console.log(SQLParserInstance);
 
     //Use Parser Methods and Generate Object + Check
-    const testEntity = SQLParserInstance.TableStatement();
-    console.log(testEntity);
+    const SQLCST = SQLParserInstance.CreatTableStatement();
+    console.log(SQLCST);
 
-    // Add a Visitor
-    const BaseCstVisitor = parser.getBaseCstVisitorConstructor();
 
 };
